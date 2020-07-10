@@ -1,0 +1,55 @@
+name: Test Suite
+
+on: [push, pull_request]
+
+jobs:
+
+  build-server:
+    name: Build server
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Use Node.js
+        uses: actions/setup-node@v1
+        with:
+          node-version: '12.x'
+
+      - name: Cache Node.js modules
+        uses: actions/cache@v2
+        with:
+          # npm cache files are stored in `~/.npm` on Linux/macOS
+          path: ~/.cache/yarn
+          key: ${{ runner.OS }}-node-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.OS }}-node-
+            ${{ runner.OS }}-
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build server
+        run: npm run build:server
+
+  ci-misc:
+    name: 'CI misc'
+    runs-on: ubuntu-latest
+    needs: build-server
+
+    services:
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
+
+      postgres:
+        image: postgres:9.6
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: peertube
+          POSTGRES_HOST_AUTH_METHOD: trust
+
+    steps:
+      - name: Run
+        run: PGUSER=peertube npm run ci -- "misc"
